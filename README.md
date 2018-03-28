@@ -55,21 +55,21 @@ This dataset is very messy, in terms that most of the data are characters and ha
 
 Yes. Movies that have achieved high box office gross tend to have higher ratings. But movies that have higher ratings don’t necessarily have high box office gross.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/1.png)
 
 ### Relationship of budget and box office gross
 
 When the budget is within reasonable amount, higher budget may bring more box office though not always the case.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/2.png)
 
 Observed which movies have high budgets and low box office. Most of them win lots of awards and nominations. Probably more artistic and only appeal to a niche market than a blockbuster.
 
 ### Do certain genre lend themselves to higher return?
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/3.png)
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/4.png)
 
 Intersting and important Findings:
 
@@ -83,7 +83,7 @@ Intersting and important Findings:
 
 This plot is sort by number of movies each director has in the dataset, because we’re more interested in well-known directors who have produced many award-winning movies. But it also means directors who has less movies might be left out in this plot. Given the limitations of space we chose the top 30 directors based on the number of their works.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/5.png)
 
 It's noticed that directors including Steven Spielberg, Peter Jackson, and Michael Bay have comparatively high box office. Let's observe what type of movies those directors with higher box office shot to see if it's more of a genre issue or director issue.
 
@@ -97,29 +97,29 @@ James Cameron: Titanic, Avatar, terminator. Action, sci-fi, adventure.
 
 This plot below shows the sum of box office of every director. This time it's sorted by the sum of box office instead of movie numbers. Directors who made it in this plot are the top 30.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/6.png)
 
 This plot is the average box office of for directors who have more than 3 movies in this dataset. James Cameron comes on top this time. He’s not as productive as spielberg, but he’s definitely the lucrative.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/7.png)
 
 Compare roi of different directors. James Wan comes top here.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/8.png)
 
 ### Does timeline influence box office?
 
 It seems that no matter past or present, every year has highs and lows. We didn't consider the inflation of currency here so it doens't mean movies nowadays bring in more money.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/10.png)
 
 About 200 movies are released every year since 1990s. To observe how time of the year influence box office, we choose year between 1988-2017 since it has more data. We plot the average of monthly movie box office of every year in scatterplot.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/11.png)
 
 This time I don’t use average monthly box office, I put the box office of every movie here. The results are similar: movies released in May, June, July (summer time) and December tends to have more box office. It makes sense.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/12.png)
 
 ### Do remakes (adaptions), tent-poles, and sequels perform differently?
 
@@ -135,7 +135,7 @@ I selected some well-known movie franchise for review. it turns out that there'r
 
 I put all the infomation about release date, box office, and roi of every movie in these series in the below plot:
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/13.png)
 
 Some interesting findings:
 
@@ -153,7 +153,7 @@ Due to the number of predictors is larger than the number of observations, we on
 
 After fitting a linear regression model, we see there’re some actors with positive coefficients meaning positive impact on box office if they are in the movie, and some with negative coefficients. Some actors have p-value < 0.05, meaning they do make a difference, and more are not significant. We analyze the actors with significant influence here.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/14.png)
 
 All actors that have significant influence over box office have positive coefficients here. The top 5 actors who could bring considerable amount of box office are Vin Diesel, Harrison Ford, Robert Downey Jr, Jennifer Lawrence, and Tom Hanks. Generally speaking more actors than actresses make it to this graph, and this may have something to do with Hollywood’s unfair payment between gender.
 
@@ -161,7 +161,7 @@ All actors that have significant influence over box office have positive coeffic
 
 The three most common ratings are R, PG-13, PG here, so we’ll only analyze the difference among these three.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/15.png)
 
 R rating movies mostly have lower box office than PG-13 and PG. It’s easy to understand since higher restriction level limits the audience.
 
@@ -178,18 +178,18 @@ For movies that have low roi, their budget is high and box office failed to make
 
 I split the cleaned data into training and test set to do cross validation to check the predictive power of models. I chose to use linear regression, dynamic trees, random forest, and xgboost here. xgboost has the lowest rmse here.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/16.png)
 
 In linear regression, it shows that predictors including imdb rating, imdb votes, some actors such as Vin Diesel/Robert Downey Jr/Jennifer Lawrence, some directors such as James Cameron/James Wan/Michael Bay, genre such as adventure/drama, keywords such as death/female/nudity/blood/family/animal, production such as Universal Pictures/WarberBros.Pictures are significant to the box office result. In the residual plot it shows some pattern in the lower left corner and I'll look into that and investigate deeper in further exploration.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/17.png)
 
 This is the dynamic regression tree plot, it only used imdb votes and budget to split the tree, no wonder the prediction result is even not as good as linear regression.
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/18.png)
 
 This is the importance plot of random forest:
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/1.png)
+![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/19.png)
 
 More work will be done after this initial modeling, such as tuning parameter for xgboost, and introducing more predictors such as population and inflation rate to predict the box office more accurately.
