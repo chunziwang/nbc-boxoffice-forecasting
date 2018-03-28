@@ -1,0 +1,1003 @@
+---
+title: "NBCUniversal - Box Office Forecasting"
+author: "Chunzi Wang"
+date: "March 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(xlsx)
+```
+
+```{r}
+movies <- read.xlsx2("C:/Users/Adimn/Desktop/NBCU-dataLaurel.xlsx",
+                     sheetIndex=1,
+                     colClasses = c("character","character","character","character","numeric","numeric","Date","character","character","numeric","character","character","Date","character","character","character","character","numeric","numeric"))
+```
+
+```{r}
+dim(movies)
+str(movies)
+#head(movies)
+```
+
+Remove 'plot' and 'poster' column because they are not needed here.
+
+```{r}
+movies <- movies[,-c(3,11)]
+summary(movies)
+```
+
+Look at the time span of the movies here. Ranging from Choplin's film in 1917 till Avatar5 in 2025 that're still in plan.
+
+```{r}
+# exclude keyword column here for tidiness
+movies[,-15] %>%
+  arrange(release_date) %>%
+  top_n(10)
+```
+
+```{r}
+movies[,-15] %>%
+  arrange(desc(release_date)) %>%
+  top_n(10)
+```
+
+Put the movies that're released after 2017 in a new set so we could predict the box office for them using historical box office value. (they have no budget and box office value in the dataframe now) To do that, first, we ned to seperate release date into new columns - year, month, and date.
+
+```{r}
+movies$release.year <- as.numeric(format(movies$release_date, format = "%Y"))
+movies$release.month <-as.numeric(format(movies$release_date, format = "%m"))
+movies$release.day <-as.numeric(format(movies$release_date, format = "%d"))
+```
+
+```{r}
+movies.after.2017 <- movies %>%
+  filter(release.year>2017)
+```
+
+```{r}
+movies.before <- movies %>%
+  filter(release.year<=2017) %>%
+  filter(Box.Office.Gross!=0) %>%
+  filter(Budget!=0)
+#head(movies.before)
+```
+
+Extract keyword column here for future use.
+
+```{r}
+keyword <- as.character(movies.before$keywords)
+
+movies.before <- subset(movies.before, select = -c(keywords))
+```
+
+Check and find that there're no more NAs and 0s in box office and budget. This is our main dataset for exploratory analysis and modeling building.
+
+```{r}
+movies.before$roi <- (movies.before$Box.Office.Gross-movies.before$Budget)/movies.before$Budget
+summary(movies.before)
+```
+
+## EXPLORATORY ANALYSIS
+
+1. Does good imdb rating positively correlated with good box office? 
+
+Yes. Movies that have achieved high box office gross tend to have higher ratings. But movies that have higher ratings don't necessarily have high box office gross.
+
+```{r}
+movies.before %>%
+  ggplot(aes(x=imdb_rating,y=Box.Office.Gross,col=Box.Office.Gross)) +
+  geom_point()
+```
+
+
+2. Relationship of budget and box office gross:
+
+```{r}
+# 2 outliers with extremly high busget
+movies.before %>%
+  filter(Budget<5000000000) %>%
+  ggplot(aes(x=Budget,y=Box.Office.Gross,alpha=0.5))+
+  geom_point(show.legend = FALSE)
+```
+
+Observe which movies have high budgets and low box office. Most of them win lots of awards and nominations. Probably more artistic and only appeal to a niche market than a blockbuster.
+
+```{r}
+movies.before %>%
+  filter(Budget>250000000) %>%
+  select(title,imdb_rating,release_date,production,actors,director,genre,awards,Budget,Box.Office.Gross,roi) %>%
+  top_n(10)
+```
+
+When the budget is within reasonable amount, higher budget may bring more box office though not always the case.
+
+```{r}
+#remove outliers to make the plot pattern clearer
+movies.before %>%
+  filter(Budget<250000000) %>%
+  ggplot(aes(x=Budget,y=Box.Office.Gross,alpha=0.5))+
+  geom_point(show.legend = FALSE)
+```
+
+
+3. Do certain genre lend themselves to higher return?
+
+```{r}
+genre <- movies.before %>%
+  count(genre) %>%
+  arrange(desc(n))
+head(genre)
+```
+
+```{r}
+movies.before %>%
+  inner_join(genre[1:30,],by="genre") %>%
+  ggplot(aes(x=genre,y=Box.Office.Gross))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+```{r}
+#remove an outlier that has over 6000 roi in horror,mystery,thriller genre
+movies.before %>%
+  inner_join(genre[1:30,],by="genre") %>%
+  filter(roi<100) %>%
+  ggplot(aes(x=genre,y=roi))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+Intersting and important Findings:
+
++ Although there're more than 300 segmented genres, it's clear in the plot that they could be integrated into three main categories: comedy & romance & drama, horror & thriller & mystery, and action & adverture & crime. Sci-Fi and Documentary are in smaller amount so these two genres didn't really stand out.
+
++ In terms of box office gross, action > comedy > thriller. It makes sense that people like watching action movies because it's exciting, and thriller is less relatable to the general public.
+
++ In terms of roi, thriller > comedy > action. Action movie needs more resources to shoot and make the setting, while thriller is generally less cost-consuming.
+
+
+4. Relationship of director and box office
+
+```{r}
+director <- movies.before %>%
+  count(director,sort=TRUE) 
+head(director)
+```
+
+This plot is sort by number of movies each director has in the dataset, because we're more interested in well-known directors who have produced many award-winning movies. But it also means directors who has less movies might be left out in this plot.
+
+```{r}
+movies.before %>%
+  inner_join(director[1:30,],by="director") %>%
+  ggplot(aes(x=director,y=Box.Office.Gross))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+Observe what type of movies those directors with higher box office shot. (more of a genre issue or director issue.)
+
+Jurassic Park series, ET, Schindler's list, AI, Indiana Jones. Adventure, sci-fi, drama, war, history, action, biography
+
+```{r}
+movies.before %>%
+  filter(director=="Steven Spielberg") %>%
+  select(title,genre,Box.Office.Gross,roi)
+```
+
+Hobbit series and King Kong. Fantasy and adventure.
+
+```{r}
+movies.before %>%
+  filter(director=="Peter Jackson") %>%
+  select(title,genre,Box.Office.Gross,roi)
+```
+
+Transformers series, action.
+
+```{r}
+movies.before %>%
+  filter(director=="Michael Bay") %>%
+  select(title,genre,Box.Office.Gross,roi)
+```
+
+Titanic, Avatar, terminator. Action, sci-fi, adventure.
+
+```{r}
+movies.before %>%
+  filter(director=="James Cameron") %>%
+  select(title,genre,Box.Office.Gross,roi)
+```
+
+Sum of box office of every director:
+
+```{r}
+movies.before %>%
+  group_by(director) %>%
+  summarize(total.box.office=sum(Box.Office.Gross)) %>%
+  arrange(desc(total.box.office)) %>%
+  top_n(10)
+```
+
+```{r}
+movies.before %>%
+  group_by(director) %>%
+  summarize(total.box.office=sum(Box.Office.Gross)) %>%
+  arrange(desc(total.box.office)) %>%
+  top_n(30) %>%
+  ggplot(aes(x=reorder(director,total.box.office),y=total.box.office,fill=total.box.office))+
+  geom_col()+
+  coord_flip()
+```
+
+Average box office of for directors who have more than 3 movies in this dataset:
+
+James Cameron comes on top this time. He's not as productive as spielberg, but he's definitely the lucrative.
+
+```{r}
+#set filter because I want to eliminate directors who only have limited movie so his box office performance may not be stable to be trustworthy
+movies.before %>%
+  group_by(director) %>%
+  filter(n()>=3) %>%
+  summarize(avg.box.office=sum(Box.Office.Gross)/n()) %>%
+  arrange(desc(avg.box.office)) %>%
+  top_n(30) %>%
+  ggplot(aes(x=reorder(director,avg.box.office),y=avg.box.office,fill=avg.box.office))+
+  geom_col()+
+  coord_flip()
+```
+
+Compare roi:
+
+```{r}
+# this is based on the number plot
+movies.before %>%
+  inner_join(director[1:30,],by="director") %>%
+  ggplot(aes(x=director,y=roi))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+```{r}
+# this is based on the total.box.office plot
+total.box.office <- movies.before %>%
+  group_by(director) %>%
+  summarize(total.box.office=sum(Box.Office.Gross)) %>%
+  arrange(desc(total.box.office))
+
+movies.before %>%
+  inner_join(total.box.office[1:30,],by="director") %>%
+  ggplot(aes(x=director,y=roi))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+5. timeline
+
+```{r}
+movies.before %>%
+  ggplot(aes(x=release_date,y=Box.Office.Gross,alpha=0.3))+
+  geom_point(show.legend = FALSE)
+```
+
+see how many movies are released every year.
+
+```{r}
+movies.before %>%
+  group_by(release.year) %>%
+  summarize(count=n()) %>%
+  top_n(10)
+```
+
+To observe how time of the year influence box office, we choose year between 1988-2017 since it has more data. The original idea is to plot every year as a line with points in 12 months (avg.box.office). But I ran into difficulties here. I'll get back to it later.
+
+```{r}
+movies.before %>%
+  filter(release.year>=1988) %>%
+  group_by(release.year,release.month) %>%
+  summarize(count=n(),avg.box.office=sum(Box.Office.Gross)/count) %>%
+  ggplot(aes(x=release.month,y=avg.box.office,alpha=0.3))+
+  geom_point(show.legend = FALSE)
+```
+
+This time I don't use average monthly box office, I put the box office of every movie here. The results are similar: movies released in May, June, July (summer time) and December tends to have more box office. It makes sense. 
+
+```{r}
+movies.before %>%
+  ggplot(aes(x=as.character(release.month),y=Box.Office.Gross,alpha=0.1))+
+  geom_boxplot(show.legend = FALSE)
+```
+
+
+6. Do remakes (adaptions), tent-poles, and sequels perform differently?
+
+Fitst step, find sequels. Sort the titles by alphabetical orders and you'll find the sequels: 21/22 Jump Street, A Huanted House, Alvin and the Chipmunks, American Pie... But it's time-consuming. A clever way would be to group by director, since a series of movies are always filmed by the same director.
+
+```{r}
+movies.before %>%
+  group_by(title) %>%
+  arrange(title) %>%
+  top_n(10)
+```
+
+I chose the top 50 director on the director dataframe sorted by the number of their films on the dataset, and sort it so it's easier to spot the sequels, especailly the well-known ones.
+
+I saw Twilight Saga, X-Men, Fast and Furious, Transformers, the Hobbit, Back to the future, Spider Man, Madea series, the hangover, Star war series, Jurassic Park series here.
+
+```{r}
+movies.before %>%
+  inner_join(director[1:50,],by="director") %>%
+  arrange(director) %>%
+  top_n(10)
+```
+
+For adaptions, I saw Alice in Wonderland, Beauty and Beast, batman V superman, the three musketers, pride & prejudice here.
+
+Select movie franchise for review.
+
+a. star war series, 3 here. 
+
+```{r}
+titles <- movies.before$title
+star.war.index <- grep(pattern = "Star War", x=titles)
+star.war <- movies.before[star.war.index,]
+star.war %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+b. Hobbit series, 3 here.
+
+```{r}
+hobbit.index <- grep(pattern = "Hobbit", x=titles)
+hobbit <- movies.before[hobbit.index,]
+hobbit %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+c. Fast and Furious, 7 here.
+
+```{r}
+ff.index <- grep(pattern = "Furious", x=titles)
+ff <- movies.before[ff.index,]
+ff %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+d. trnasformer series, 4 here. 
+
+```{r}
+trans.index <- grep(pattern = "Transformers", x=titles)
+transformers <- movies.before[trans.index,]
+transformers %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+e. spiderman series, 5 here.
+
+```{r}
+spider.index <- grep(pattern = "Spider-Man", x=titles)
+spiderman <- movies.before[spider.index,]
+spiderman %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+f. Harry Potter series, only 2 here.
+
+```{r}
+hp.index <- grep(pattern = "Harry Potter", x=titles)
+hp <- movies.before[hp.index,]
+hp %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+g. Jurassic Park, 3 here.
+
+```{r}
+jp.index <- grep(pattern = "Jurassic", x=titles)
+jp <- movies.before[jp.index,]
+jp %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+h. Batman, 3 here.
+
+```{r}
+bat.index <- grep(pattern = "Batman", x=titles)
+batman <- movies.before[bat.index,]
+batman %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+From our choice of 7 sequel movie seires, although we only have part of data in each series, it seems that only Star Wars and Jurassic Park has remained high roi for all series. 
+
+Adding all of these sequels into a dataframe:
+
+```{r}
+sequels <- rbind(ff,hobbit,hp,jp,spiderman,star.war,transformers,batman)
+
+sequels$category <- NA
+sequels$category[1:7] <- "FF"
+sequels$category[8:10] <- "Hobbit"
+sequels$category[11:12] <- "HP"
+sequels$category[13:15] <- "JP"
+sequels$category[16:20] <- "Spiderman"
+sequels$category[21:23] <- "SW"
+sequels$category[24:27] <- "Transformers"
+sequels$category[28:30] <- "Batman"
+
+sequels
+```
+
+```{r}
+#color <- c("#999999","#000000","#E69F00","#56B4E9","#009E73","#FF6600","#0072B2")
+
+sequels %>%
+  ggplot(aes(x=release_date,y=roi,col=category,alpha=0.9))+
+  geom_point(aes(size=Box.Office.Gross))+
+  geom_line()
+```
+
+For adaptions and remakes, there're 2 adapted from fairy tales, and 2 from classic literature.
+
+a. Alice in Wonderland
+
+```{r}
+alice.index <- grep(pattern = "Alice in Wonderland", x=titles)
+alice <- movies.before[alice.index,]
+alice %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+b. Beauty and Beast
+
+```{r}
+bb.index <- grep(pattern = "Beauty and the Beast", x=titles)
+bb <- movies.before[bb.index,]
+bb %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+c. the Three Musketers
+
+```{r}
+musketeers.index <- grep(pattern = "Musketeers", x=titles)
+musketeers <- movies.before[musketeers.index,]
+musketeers %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+d. Pride & Prejudice
+
+```{r}
+pp.index <- grep(pattern = "Pride & Prejudice", x=titles)
+pp <- movies.before[pp.index,]
+pp %>%
+  arrange(release_date) %>%
+  select(title, release_date, imdb_rating, Budget, Box.Office.Gross, roi)
+```
+
+For adaptions and remakes, I think the box office and roi may be related to the popularity of the content and ratings. For some literary work that's less well-known and may not be well produced, it's natural that the roi is negative. So choosing the right Intellectual Property "IP" here is very important for remakes and adaptions, see Beauty and the Beast. 
+
+7. Actors Analysis
+
+```{r}
+movies.before %>%
+  count(actors,sort=TRUE) %>%
+  top_n(10)
+```
+
+Need to break down actor column into document term matrix to better analyze the relationship of actors and box office.
+
+```{r}
+library(tm)
+
+# or first name and last name will be seperated into two items
+actor <- as.character(movies.before$actors)
+actor <- gsub(",", "   ", actor, fixed = TRUE)
+actor <- gsub(" ", ".", actor, fixed = TRUE)
+actor <- gsub("...", " ", actor, fixed = TRUE)
+actor <- gsub(".", "", actor, fixed = TRUE)
+
+actor.source <- VectorSource(actor)
+actor.corpus <- VCorpus(actor.source)
+actor.corpus.clean <- tm_map(actor.corpus,removePunctuation)
+
+actor.dtm <- DocumentTermMatrix(actor.corpus.clean)
+actor.matrix <- as.matrix(actor.dtm)
+
+term.freq <- colSums(actor.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,50)
+```
+
+The Top 50 actors who appear in our dataset by number is Robert Deniro, Tom Hanks, Adam Sandler, Liam Neeson, Steve Carell and so on. There're lots of big stars in this list including Robert Downey Jr, Julianne Moore, Matt Damon, Amy Adams, Jennifer Aniston, Johnny Depp, Arnold Schwarzenegger, Matthew McConaughey.
+
+Due to the number of predictors is larger than the number of observations, we only include a limited number of actors here (keep the well-known ones to see if they have a direct association with box office) based on how many movies they played in in this dataset (>=10).
+
+```{r}
+actor.df.whole <- as.data.frame(actor.matrix)
+```
+
+```{r}
+actor.df.selected <- actor.df.whole[,which(colSums(actor.df.whole)>=10)]
+dim(actor.df.selected)
+```
+
+```{r}
+actor.df.selected$box.office <- movies.before$Box.Office.Gross
+actor.lm <- lm(box.office~.,data=actor.df.selected)
+summary(actor.lm)
+```
+
+There're some actors with positive coefficients meaning positive impact on box office if they are in the movie, and some with negative coefficients. Some actors have p-value < 0.05, meaning they do make a difference, and more are not significant. We analyze the actors with significant influence here.
+
+```{r}
+keep.actor <- c("zachgalifianakis","willarnett","vindiesel","tomhanks","tomcruise","stevecarell","scarlettjohansson","ryanreynolds","robertdowneyjr","ralphfiennes","natalieportman","mattdamon","matthewmcconaughey","markwahlberg","kristenwiig","liamneeson","kristenstewart","kirstendunst","kevinhart","johnnydepp","josephgordonlevitt","johngoodman","jasonbateman","jenniferlawrence","jimcarrey","jamesfranco","hughjackman","harrisonford","gerardbutler","adamsandler","amyadams","angelinajolie","benstiller","bradleycooper","camerondiaz","cateblanchett","chrisevans","chrishemsworth","chrispine","dwaynejohnson","eddiemurphy","emmastone")
+
+actor.coeffi <- data.frame(actor=keep.actor, influence.coefficient=actor.lm$coefficients[keep.actor])
+head(actor.coeffi)
+```
+
+```{r}
+dim(actor.coeffi)
+```
+
+```{r}
+actor.coeffi %>%
+  ggplot(aes(x=reorder(actor,influence.coefficient),y=influence.coefficient,fill=influence.coefficient))+
+  geom_col()+
+  coord_flip()+
+  labs(x="actor")
+```
+
+All actors that have significant influence over box office have positive coefficients here. The top 5 actors who could bring considerable amount of box office are Vin Diesel, Harrison Ford, Robert Downey Jr, Jennifer Lawrence, and Tom Hanks. Generally speaking more actors than actresses make it to this graph, and this may have something to do with Hollywood's unfair payment between gender.
+
+8. Does a movie's rating influence its box office?
+
+```{r}
+table(movies.before$rating)
+```
+
+The three most common ratings are R, PG-13, PG here, so we'll only analyze the difference among these three.
+
+```{r}
+movies.before %>%
+  filter(rating %in% c("R","PG","PG-13")) %>%
+  group_by(rating) %>%
+  ggplot(aes(x=rating,y=Box.Office.Gross))+
+  geom_boxplot()
+```
+
+R rating movies mostly have lower box office than PG-13 and PG. It's easy to understand since higher restriction level limits the audience.
+
+9. Why do some small budge films end up being blockbuster hits? Conversely, why do some large budge films fail?
+
+We filter out movies that have top 10 roi and bottom 10 roi to find a pattern.
+
+```{r}
+movies.before %>%
+  arrange(desc(roi)) %>% 
+  top_n(10)
+```
+
+By observation, it's noticed that for movies that have high roi, they mostly have low budget, not-so-well-known director and actors, but have some nominations and awards. And half of them are horror+thriller genre.
+
+```{r}
+movies.before %>%
+  arrange(roi) %>%
+  top_n(-10)
+```
+
+For movies that have low roi, their budget is high and box office failed to make ends meet. Half of them are action movies and half are drama+romance. Action movie is usually more costly than other genre as we mentioned above.
+
+
+## PREDICTIVE MODELING
+
+
+1. In order to do Linear Regression, we don't want useless columns including title, imdbid, dvd_release, release_date (keep seperate release info) and roi so we only keep the useful numeric columns as predictors.
+
+```{r}
+keep <- c("imdb_rating","metacritic","imdb_votes","Budget","Box.Office.Gross","release.year","release.month")
+movies.clean <- movies.before[keep]
+```
+
+```{r}
+head(movies.clean)
+```
+
+3. For runtime column we remove the "min" and transform it into numeric type.
+
+```{r}
+for (i in 1:nrow(movies.before)){
+  movies.clean$runtime[i] <- as.numeric(strsplit(as.character(movies.before$runtime),split=" ")[[i]][1])
+}
+```
+
+4. For other categorical columns including rating, production, actors, director, genre, awards, keywords, we will use bag of words method to create a dtm and add these dummy variable to train.clean.
+
+```{r}
+library(tm)
+```
+
+4.1 Genre
+
+```{r}
+genre <- as.character(movies.before$genre)
+head(genre,5)
+```
+
+```{r}
+genre.source <- VectorSource(genre)
+genre.corpus <- VCorpus(genre.source)
+print(genre.corpus[[1]][1])
+```
+
+Create a clean_corpus function.
+
+```{r}
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus,removePunctuation)
+  return(corpus)
+}
+```
+
+```{r}
+genre.corpus.clean <- clean_corpus(genre.corpus)
+print(genre.corpus.clean[[1]][1])
+```
+
+```{r}
+genre.dtm <- DocumentTermMatrix(genre.corpus.clean)
+genre.matrix <- as.matrix(genre.dtm)
+dim(genre.matrix)
+genre.matrix[1:5,1:23]
+```
+
+```{r}
+term.freq <- colSums(genre.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+term.freq
+```
+
+```{r}
+keep.genre <- c("action","adventure","comedy","drama","romance","fantasy","horror","thriller","mystery","scifi","crime")
+genre.df <- as.data.frame(genre.matrix)[keep.genre]
+head(genre.df)
+```
+
+4.2 Actor
+
+```{r}
+actor.df <- as.data.frame(actor.matrix)[keep.actor]
+head(actor.df)
+```
+
+4.3 Production
+
+```{r}
+production <- as.character(movies.before$production)
+production <- gsub(" ","",production,fixed=TRUE)
+production.source <- VectorSource(production)
+production.corpus <- VCorpus(production.source)
+
+production.dtm <- DocumentTermMatrix(production.corpus)
+production.matrix <- as.matrix(production.dtm)
+
+term.freq <- colSums(production.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,20)
+```
+
+```{r}
+keep.production <- c("universalpictures","warnerbros.pictures","20thcenturyfox","sonypictures","paramountpictures","waltdisneypictures","focusfeatures","lionsgatefilms","sonypicturesclassics","columbiapictures")
+production.df <- as.data.frame(production.matrix)[keep.production]
+```
+
+4.4 Director
+
+```{r}
+director <- as.character(movies.before$director)
+director <- gsub(" ","",director,fixe=TRUE)
+director.source <- VectorSource(director)
+director.corpus <- VCorpus(director.source)
+
+director.dtm <- DocumentTermMatrix(director.corpus)
+director.matrix <- as.matrix(director.dtm)
+
+term.freq <- colSums(director.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+```
+```{r}
+head(term.freq,70)
+```
+
+```{r}
+keep.director <- c("stevenspielberg","jamescameron","christophernolan","woodyallen","ronhoward","robertzemeckis","stevensoderbergh","dennisdugan","spikelee","oliverstone","peterberg","ridleyscott","anglee","robcohen","timburton","jameswan","michaelbay","clinteastwood","tylerperry","peterjackson","ethancoen,joelcoen","davidlynch","joewright","sofiacoppola")
+director.df <- as.data.frame(director.matrix)[keep.director]
+```
+
+4.5 Award and nominaton
+
+Here the infos about awards and nomination has been reduced to four columns: nomination, oscar, golden globe, and award. Numbers of awards and nominations are not included for simplicity reason.
+
+```{r}
+library(textreg)
+```
+
+```{r}
+award <- as.character(movies.before$awards)
+award.source <- VectorSource(award)
+award.corpus <- VCorpus(award.source)
+
+# clean and stem corpus
+award.corpus <- tm_map(award.corpus,removePunctuation)
+award.corpus <- tm_map(award.corpus,removeNumbers)
+award.corpus <- tm_map(award.corpus,content_transformer(tolower))
+award.corpus <- stem.corpus(award.corpus,verbose=FALSE)
+
+award.dtm <- DocumentTermMatrix(award.corpus)
+award.matrix <- as.matrix(award.dtm)
+
+term.freq <- colSums(award.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+term.freq
+```
+
+```{r}
+keep.award <- c("nomin+","oscar+","globe+","award+")
+award.df <- as.data.frame(award.matrix)[keep.award]
+colnames(award.df) <- c("nomination","oscar","golden globe","award")
+```
+
+4.6 Keyword
+
+```{r}
+# keyword <- as.character(movies.before$keywords) executed above
+keyword <- gsub("|"," ",keyword,fixe=TRUE)
+keyword <- gsub("-"," ",keyword,fixe=TRUE)
+
+keyword.source <- VectorSource(keyword)
+keyword.corpus <- VCorpus(keyword.source)
+keyword.corpus <- tm_map(keyword.corpus,removeWords,stopwords("en"))
+
+keyword.dtm <- DocumentTermMatrix(keyword.corpus)
+keyword.matrix <- as.matrix(keyword.dtm)
+
+term.freq <- colSums(keyword.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,100)
+```
+
+```{r}
+keep.keyword <- c("relationship","death","shot","car","female","woman","man","male","police","sex","nudity","blood","gun","murder","hero","father","mother","son","american","daughter","child","wife","fight","school","husband","violence","love","family","dog","war","animal","friendship","teenage")
+keyword.df <- as.data.frame(keyword.matrix)[keep.keyword]
+head(keyword.df)
+```
+
+4.7 Rating
+
+I don't know why some ratings in corpus cannot be transalted into dtm. Just ignore it for now
+
+```{r}
+rating <- as.character(movies.before$rating)
+head(rating,10)
+rating.source <- VectorSource(rating)
+rating.corpus <- VCorpus(rating.source)
+
+table(movies.before$rating)
+
+for (i in 1:20){
+  print(rating.corpus[[i]][1])
+}
+```
+
+```{r}
+rating.dtm <- DocumentTermMatrix(rating.corpus)
+rating.matrix <- as.matrix(rating.dtm)
+dim(rating.matrix)
+head(rating.matrix)
+```
+
+
+5. Combine these dataframes together
+
+```{r}
+dim(movies.clean)
+dim(actor.df)
+dim(award.df)
+dim(director.df)
+dim(genre.df)
+dim(keyword.df)
+dim(production.df)
+```
+
+```{r}
+movies.clean.df <- cbind(movies.clean,actor.df,award.df,director.df,genre.df,keyword.df,production.df)
+dim(movies.clean.df)
+```
+
+```{r}
+write.csv(movies.clean.df,"movies_clean.csv")
+```
+
+6. split into train and test set for model validation.
+
+Find NAs and in movies.clean.df in imdb_rating, matacritic, imdb_votes, and runtime.
+
+```{r}
+summary(movies.clean.df)
+```
+
+```{r}
+# Fill in 0 where there's NA
+movies.clean.df[which(is.na(movies.clean.df$imdb_rating)),1] <- 0
+movies.clean.df[which(is.na(movies.clean.df$metacritic)),2] <- 0
+movies.clean.df[which(is.na(movies.clean.df$imdb_votes)),3] <- 0
+movies.clean.df[which(is.na(movies.clean.df$runtime)),8] <- 0
+```
+
+```{r}
+set.seed(1)
+train.index <- sample(nrow(movies.clean.df),round(nrow(movies.clean.df)*0.8))
+train <- movies.clean.df[train.index,]
+test <- movies.clean.df[-train.index,]
+```
+
+7. Fit linear regression model
+
+```{r}
+train.fit <- lm(Box.Office.Gross~.,data=train)
+summary(train.fit)
+```
+
+In this model, p-value is significant and we have good explanatory power (68.67% of variability in box office is expalined by these predictors.) given the complexity of the dataset.
+
+```{r}
+plot(train.fit)
+```
+
+We can see that observation 11, 811, 725 tend to be outliers in three plots, so we elimate them from the train set and fit the model again. There's a light improvement but so little that could be ignored. 
+
+Predict using test set and calculate rmse.
+
+```{r}
+pred <- predict(train.fit,test)
+test$pred.lm <- pred
+```
+
+There're negative predicted value here, which means our model is not performing very well.
+
+```{r}
+pred.result <- test %>%
+  select(Box.Office.Gross,pred.lm)
+pred.result$ratio.lm <- round(pred.result$pred.lm/pred.result$Box.Office.Gross,2)
+head(pred.result)
+```
+
+```{r}
+RMSE.lm <- sqrt(mean((test$pred.lm-test$Box.Office.Gross)^2))
+RMSE.lm
+```
+
+8. Fit regression tree model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+tree.fit <- rpart(formula=Box.Office.Gross~.,data=train,method="anova")
+print(tree.fit)
+rpart.plot(tree.fit)
+```
+
+```{r}
+pred.tree <- predict(tree.fit,test)
+
+pred.result$pred.tree <- pred.tree
+pred.result$ratio.tree <- round(pred.result$pred.tree/pred.result$Box.Office.Gross,2)
+head(pred.result)
+```
+
+```{r}
+RMSE.tree <- sqrt(mean((pred.tree-test$Box.Office.Gross)^2))
+RMSE.tree
+```
+
+9. Fit random forest model
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+names(train) <- make.names(names(train))
+rf.fit <- randomForest(formula=Box.Office.Gross~.,data=train,importance=TRUE)
+rf.fit
+varImpPlot(rf.fit)
+```
+
+70.47% of variance explained, better than linear regression with lower rmse.
+
+```{r}
+names(test) <- make.names(names(test))
+pred.rf <- predict(rf.fit,test)
+
+pred.result$pred.rf <- pred.rf
+pred.result$ratio.rf <- round(pred.rf/pred.result$Box.Office.Gross,2)
+head(pred.result)
+```
+
+```{r}
+RMSE.rf <- sqrt(mean((pred.rf-test$Box.Office.Gross)^2))
+RMSE.rf
+```
+
+10. Fit xgboost
+
+```{r}
+library(xgboost)
+```
+
+```{r}
+xgb.fit <- xgboost(data=as.matrix(train[,-5]),
+                   nfold=5,
+                   label=as.matrix(train$Box.Office.Gross),
+                   nrounds=2200,
+                   verbose=FALSE,
+                   objective="reg:linear",
+                   eval_metric="rmse",
+                   nthread=8,
+                   eta=0.01,
+                   gamma=0.0468,
+                   max_depth=15,
+                   min_child_weight=1.7817,
+                   subsample=0.5213,
+                   colsample_bytree=0.4603)
+```
+
+```{r}
+xgb.fit
+```
+
+```{r}
+library(Metrics)
+```
+
+```{r}
+pred.xgb <- predict(xgb.fit,newdata=as.matrix(test[,-5]))
+
+pred.result$pred.xgb <- pred.xgb
+pred.result$ratio.xgb <- round(pred.xgb/pred.result$Box.Office.Gross,2)
+head(pred.result)
+```
+
+```{r}
+RMSE.xgb <- rmse(test$Box.Office.Gross,pred.xgb)
+RMSE.xgb
+```
+
+xgb has the lowest rmse among the 4 models.
+
+
+
+

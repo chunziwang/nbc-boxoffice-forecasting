@@ -1,0 +1,459 @@
+---
+title: "NBCUniversal - Forecasting Model Building and Evaluation"
+author: "Chunzi Wang"
+date: "March 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+Predictive Modeling
+
+
+1. In order to do Linear Regression, we don't want useless columns including title, imdbid, dvd_release, release_date (keep seperate release info) and roi so we only keep the useful numeric columns as predictors.
+
+```{r}
+keep <- c("imdb_rating","metacritic","imdb_votes","Budget","Box.Office.Gross","release.year","release.month")
+movies.clean <- movies.before[keep]
+```
+
+```{r}
+head(movies.clean)
+```
+
+3. For runtime column we remove the "min" and transform it into numeric type.
+
+```{r}
+for (i in 1:nrow(movies.before)){
+  movies.clean$runtime[i] <- as.numeric(strsplit(as.character(movies.before$runtime),split=" ")[[i]][1])
+}
+```
+
+4. For other categorical columns including rating, production, actors, director, genre, awards, keywords, we will use bag of words method to create a dtm and add these dummy variable to train.clean.
+
+```{r}
+library(tm)
+```
+
+4.1 Genre
+
+```{r}
+genre <- as.character(movies.before$genre)
+head(genre,5)
+```
+
+```{r}
+genre.source <- VectorSource(genre)
+genre.corpus <- VCorpus(genre.source)
+print(genre.corpus[[1]][1])
+```
+
+Create a clean_corpus function.
+
+```{r}
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus,removePunctuation)
+  return(corpus)
+}
+```
+
+```{r}
+genre.corpus.clean <- clean_corpus(genre.corpus)
+print(genre.corpus.clean[[1]][1])
+```
+
+```{r}
+genre.dtm <- DocumentTermMatrix(genre.corpus.clean)
+genre.matrix <- as.matrix(genre.dtm)
+dim(genre.matrix)
+genre.matrix[1:5,1:23]
+```
+
+```{r}
+term.freq <- colSums(genre.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+term.freq
+```
+
+```{r}
+keep.genre <- c("action","adventure","comedy","drama","romance","fantasy","horror","thriller","mystery","scifi","crime")
+genre.df <- as.data.frame(genre.matrix)[keep.genre]
+head(genre.df)
+```
+
+4.2 Actor
+
+```{r}
+# or first name and last name will be seperated into two items
+actor <- as.character(movies.before$actors)
+actor <- gsub(",", "   ", actor, fixed = TRUE)
+actor <- gsub(" ", ".", actor, fixed = TRUE)
+actor <- gsub("...", " ", actor, fixed = TRUE)
+actor <- gsub(".", "", actor, fixed = TRUE)
+
+actor.source <- VectorSource(actor)
+actor.corpus <- VCorpus(actor.source)
+actor.corpus.clean <- clean_corpus(actor.corpus)
+
+actor.dtm <- DocumentTermMatrix(actor.corpus.clean)
+actor.matrix <- as.matrix(actor.dtm)
+
+term.freq <- colSums(actor.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,50)
+```
+
+```{r}
+keep.actor <- c("robertdeniro","tomhanks","adamsandler","liamneeson","stevecarell","dwaynejohnson","jasonbateman","markwahlberg","naomiwatts","robertdowneyjr","brucewillis","juliannemoore","mattdamon","matthewmcconaughey","owenwilson","woodyharrelson","amyadams","jenniferaniston","johnnydepp","arnoldschwarzenegger","jasonstatham","jeffbridges","markruffalo","nicolascage","susansarandon","alecbaldwin","bradleycooper","channingtatum","danaykroyd","dennisquaid","emilyblunt","ewanmcgregor","georgeclooney","jamesfranco","jamesmcavoy","nicolekidman","camerondiaz","juliaroberts","jenniferlawrence")
+actor.df <- as.data.frame(actor.matrix)[keep.actor]
+head(actor.df)
+```
+
+4.3 Production
+
+```{r}
+production <- as.character(movies.before$production)
+production <- gsub(" ","",production,fixed=TRUE)
+production.source <- VectorSource(production)
+production.corpus <- VCorpus(production.source)
+
+production.dtm <- DocumentTermMatrix(production.corpus)
+production.matrix <- as.matrix(production.dtm)
+
+term.freq <- colSums(production.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,20)
+```
+
+```{r}
+keep.production <- c("universalpictures","warnerbros.pictures","20thcenturyfox","sonypictures","paramountpictures","waltdisneypictures","focusfeatures","lionsgatefilms","sonypicturesclassics","columbiapictures")
+production.df <- as.data.frame(production.matrix)[keep.production]
+```
+
+4.4 Director
+
+```{r}
+director <- as.character(movies.before$director)
+director <- gsub(" ","",director,fixe=TRUE)
+director.source <- VectorSource(director)
+director.corpus <- VCorpus(director.source)
+
+director.dtm <- DocumentTermMatrix(director.corpus)
+director.matrix <- as.matrix(director.dtm)
+
+term.freq <- colSums(director.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+```
+```{r}
+head(term.freq,70)
+```
+
+```{r}
+keep.director <- c("stevenspielberg","jamescameron","christophernolan","woodyallen","ronhoward","robertzemeckis","stevensoderbergh","dennisdugan","spikelee","oliverstone","peterberg","ridleyscott","anglee","robcohen","timburton","jameswan","michaelbay","clinteastwood","tylerperry","peterjackson","ethancoen,joelcoen","davidlynch","joewright","sofiacoppola")
+director.df <- as.data.frame(director.matrix)[keep.director]
+```
+
+4.5 Award and nominaton
+
+Here the infos about awards and nomination has been reduced to four columns: nomination, oscar, golden globe, and award. Numbers of awards and nominations are not included for simplicity reason.
+
+```{r}
+library(textreg)
+```
+
+```{r}
+award <- as.character(movies.before$awards)
+award.source <- VectorSource(award)
+award.corpus <- VCorpus(award.source)
+
+# clean and stem corpus
+award.corpus <- tm_map(award.corpus,removePunctuation)
+award.corpus <- tm_map(award.corpus,removeNumbers)
+award.corpus <- tm_map(award.corpus,content_transformer(tolower))
+award.corpus <- stem.corpus(award.corpus)
+
+award.dtm <- DocumentTermMatrix(award.corpus)
+award.matrix <- as.matrix(award.dtm)
+
+term.freq <- colSums(award.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+term.freq
+```
+
+```{r}
+keep.award <- c("nomin+","oscar+","globe+","award+")
+award.df <- as.data.frame(award.matrix)[keep.award]
+colnames(award.df) <- c("nomination","oscar","golden globe","award")
+```
+
+4.6 Keyword
+
+```{r}
+keyword <- as.character(movies.before$keywords)
+keyword <- gsub("|"," ",keyword,fixe=TRUE)
+keyword <- gsub("-"," ",keyword,fixe=TRUE)
+
+keyword.source <- VectorSource(keyword)
+keyword.corpus <- VCorpus(keyword.source)
+keyword.corpus <- tm_map(keyword.corpus,removeWords,stopwords("en"))
+
+keyword.dtm <- DocumentTermMatrix(keyword.corpus)
+keyword.matrix <- as.matrix(keyword.dtm)
+
+term.freq <- colSums(keyword.matrix)
+term.freq <- sort(term.freq,decreasing = TRUE)
+head(term.freq,100)
+```
+
+```{r}
+keep.keyword <- c("relationship","death","shot","car","female","woman","man","male","police","sex","nudity","blood","gun","murder","hero","father","mother","son","american","daughter","child","wife","fight","school","husband","violence","love","family","dog","war","animal","friendship","teenage")
+keyword.df <- as.data.frame(keyword.matrix)[keep.keyword]
+head(keyword.df)
+```
+
+4.7 Rating
+
+I don't know why some ratings in corpus cannot be transalted into dtm. Just ignore it for now
+
+```{r}
+rating <- as.character(movies.before$rating)
+head(rating,10)
+rating.source <- VectorSource(rating)
+rating.corpus <- VCorpus(rating.source)
+
+table(movies.before$rating)
+
+for (i in 1:20){
+  print(rating.corpus[[i]][1])
+}
+```
+
+```{r}
+rating.dtm <- DocumentTermMatrix(rating.corpus)
+rating.matrix <- as.matrix(rating.dtm)
+dim(rating.matrix)
+head(rating.matrix)
+```
+
+
+5. Combine these dataframes together
+
+```{r}
+dim(movies.clean)
+dim(actor.df)
+dim(award.df)
+dim(director.df)
+dim(genre.df)
+dim(keyword.df)
+dim(production.df)
+```
+
+```{r}
+movies.clean.df <- cbind(movies.clean,actor.df,award.df,director.df,genre.df,keyword.df,production.df)
+dim(movies.clean.df)
+```
+
+```{r}
+write.csv(movies.clean.df,"movies_clean.csv")
+```
+
+6. split into train and test set for model validation.
+
+Find NAs and in movies.clean.df in imdb_rating, matacritic, imdb_votes, and runtime.
+
+```{r}
+summary(movies.clean.df)
+```
+
+```{r}
+# Fill in 0 where there's NA
+movies.clean.df[which(is.na(movies.clean.df$imdb_rating)),1] <- 0
+movies.clean.df[which(is.na(movies.clean.df$metacritic)),2] <- 0
+movies.clean.df[which(is.na(movies.clean.df$imdb_votes)),3] <- 0
+movies.clean.df[which(is.na(movies.clean.df$runtime)),8] <- 0
+```
+
+```{r}
+set.seed(1)
+train.index <- sample(nrow(movies.clean.df),round(nrow(movies.clean.df)*0.8))
+train <- movies.clean.df[train.index,]
+test <- movies.clean.df[-train.index,]
+```
+
+7. Fit linear regression model
+
+```{r}
+train.fit <- lm(Box.Office.Gross~.,data=train)
+summary(train.fit)
+```
+
+In this model, p-value is significant and we have good explanatory power (68.67% of variability in box office is expalined by these predictors.) given the complexity of the dataset.
+
+```{r}
+plot(train.fit)
+```
+
+We can see that observation 11, 811, 725 tend to be outliers in three plots, so we elimate them from the train set and fit the model again. There's a light improvement but so little that could be ignored. 
+
+Predict using test set and calculate rmse.
+
+```{r}
+pred <- predict(train.fit,test)
+test$pred.lm <- pred
+```
+
+There're negative predicted value here, which means our model is not performing very well.
+
+```{r}
+pred.result <- test %>%
+  select(Box.Office.Gross,pred.lm)
+pred.result$ratio.lm <- round(pred.result$pred.lm/pred.result$Box.Office.Gross,2)
+pred.result
+```
+
+```{r}
+RMSE.lm <- sqrt(mean((test$pred.lm-test$Box.Office.Gross)^2))
+RMSE.lm
+```
+
+Subset the dataset using only siginificant predictors in lm. It doesn't impact the r-squared at all. Disapointed.
+
+```{r}
+keep.predictor <- c("imdb_rating","imdb_votes","stevecarell","dwaynejohnson","robertdowneyjr","owenwilson","arnoldschwarzenegger","bradleycooper","camerondiaz","jenniferlawrence","nomination","oscar","golden globe","award","stevenspielberg","jamescameron","robertzemeckis","ronhoward","jameswan","michaelbay","tylerperry","joewright","adventure","drama","death","female","man","nudity","blood","murder","hero","mother","love","animal","friendship","universalpictures","warnerbros.pictures","20thcenturyfox","sonypictures","waltdisneypictures","columbiapictures","sonypicturesclassics","Box.Office.Gross")
+train.new <- train[keep.predictor]
+test.new <- test[keep.predictor]
+```
+
+```{r}
+train.fit <- lm(Box.Office.Gross~.,data=train.new)
+summary(train.fit)
+```
+
+```{r}
+pred <- predict(train.fit,test.new)
+test.new$pred.lm <- pred
+pred.result <- test.new %>%
+  select(Box.Office.Gross,pred.lm)
+pred.result$ratio.lm <- round(pred.result$pred.lm/pred.result$Box.Office.Gross,2)
+pred.result
+```
+
+```{r}
+RMSE.lm <- sqrt(mean((test.new$pred.lm-test.new$Box.Office.Gross)^2))
+RMSE.lm
+```
+
+8. Fit regression tree model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+tree.fit <- rpart(formula=Box.Office.Gross~.,data=train,method="anova")
+print(tree.fit)
+rpart.plot(tree.fit)
+```
+
+```{r}
+pred.tree <- predict(tree.fit,test)
+
+pred.result$pred.tree <- pred.tree
+pred.result$ratio.tree <- round(pred.result$pred.tree/pred.result$Box.Office.Gross,2)
+pred.result
+```
+
+```{r}
+RMSE.tree <- sqrt(mean((pred.tree-test$Box.Office.Gross)^2))
+RMSE.tree
+```
+
+9. Fit random forest model
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+names(train) <- make.names(names(train))
+rf.fit <- randomForest(formula=Box.Office.Gross~.,data=train,importance=TRUE)
+rf.fit
+varImpPlot(rf.fit)
+```
+
+70.47% of variance explained, better than linear regression with lower rmse.
+
+```{r}
+names(test) <- make.names(names(test))
+pred.rf <- predict(rf.fit,test)
+
+pred.result$pred.rf <- pred.rf
+pred.result$ratio.rf <- round(pred.rf/pred.result$Box.Office.Gross,2)
+pred.result
+```
+
+```{r}
+RMSE.rf <- sqrt(mean((pred.rf-test$Box.Office.Gross)^2))
+RMSE.rf
+```
+
+10. Fit xgboost
+
+```{r}
+library(xgboost)
+```
+
+```{r}
+xgb.fit <- xgboost(data=as.matrix(train[,-5]),
+                   nfold=5,
+                   label=as.matrix(train$Box.Office.Gross),
+                   nrounds=2200,
+                   verbose=FALSE,
+                   objective="reg:linear",
+                   eval_metric="rmse",
+                   nthread=8,
+                   eta=0.01,
+                   gamma=0.0468,
+                   max_depth=15,
+                   min_child_weight=1.7817,
+                   subsample=0.5213,
+                   colsample_bytree=0.4603)
+```
+
+```{r}
+xgb.fit
+```
+
+```{r}
+library(Metrics)
+```
+
+```{r}
+pred.xgb <- predict(xgb.fit,newdata=as.matrix(test[,-5]))
+
+pred.result$pred.xgb <- pred.xgb
+pred.result$ratio.xgb <- round(pred.xgb/pred.result$Box.Office.Gross,2)
+pred.result
+```
+
+```{r}
+RMSE.xgb <- rmse(test$Box.Office.Gross,pred.xgb)
+RMSE.xgb
+```
+
+xgb has the lowest rmse among the 4 models.
+
+
+
+
+
+
+
+
+
