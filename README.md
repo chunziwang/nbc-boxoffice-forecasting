@@ -178,18 +178,18 @@ For movies that have low roi, their budget is high and box office failed to make
 
 I split the cleaned data into training and test set to do cross validation to check the predictive power of models. I chose to use linear regression, dynamic trees, random forest, and xgboost here. xgboost has the lowest rmse here.
 
-![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/16.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/19.png)
 
 In linear regression, it shows that predictors including imdb rating, imdb votes, some actors such as Vin Diesel/Robert Downey Jr/Jennifer Lawrence, some directors such as James Cameron/James Wan/Michael Bay, genre such as adventure/drama, keywords such as death/female/nudity/blood/family/animal, production such as Universal Pictures/WarberBros.Pictures are significant to the box office result. In the residual plot it shows some pattern in the lower left corner and I'll look into that and investigate deeper in further exploration.
 
-![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/17.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/16.png)
 
 This is the dynamic regression tree plot, it only used imdb votes and budget to split the tree, no wonder the prediction result is even not as good as linear regression.
 
-![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/18.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/17.png)
 
 This is the importance plot of random forest:
 
-![](https://github.com/chunziwang/whole-foods-market-basket-analysis/blob/master/figs/19.png)
+![](https://github.com/chunziwang/nbc-boxoffice-forecasting/blob/master/figs/18.png)
 
 More work will be done after this initial modeling, such as tuning parameter for xgboost, and introducing more predictors such as population and inflation rate to predict the box office more accurately.
